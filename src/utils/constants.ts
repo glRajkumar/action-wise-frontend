@@ -1,5 +1,5 @@
 
 export const web = {
-  name: "ActionWise",
+  name: "Action Wise",
   for: "",
 }
