@@ -16,7 +16,13 @@ import { Route as SignInRouteImport } from './routes/sign-in'
 import { Route as SignUpRouteImport } from './routes/sign-up'
 import { Route as VerifyEmailRouteImport } from './routes/verify-email'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
+import { Route as AppAcceptInviteRouteImport } from './routes/_app/accept-invite'
 import { Route as AppSettingsRouteImport } from './routes/_app/settings'
+import { Route as AppConnectionsIndexRouteImport } from './routes/_app/connections/index'
+import { Route as AppPlaygroundIndexRouteImport } from './routes/_app/playground/index'
+import { Route as AppRegistryIndexRouteImport } from './routes/_app/registry/index'
+import { Route as AppWorkspacesIndexRouteImport } from './routes/_app/workspaces/index'
+import { Route as AppWorkspacesWorkspaceIdRouteImport } from './routes/_app/workspaces/$workspaceId'
 
 const AppRoute = AppRouteImport.update({
   id: '/_app',
@@ -52,11 +58,42 @@ const AppIndexRoute = AppIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AppRoute,
 } as any)
+const AppAcceptInviteRoute = AppAcceptInviteRouteImport.update({
+  id: '/accept-invite',
+  path: '/accept-invite',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppSettingsRoute = AppSettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
   getParentRoute: () => AppRoute,
 } as any)
+const AppConnectionsIndexRoute = AppConnectionsIndexRouteImport.update({
+  id: '/connections/',
+  path: '/connections/',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppPlaygroundIndexRoute = AppPlaygroundIndexRouteImport.update({
+  id: '/playground/',
+  path: '/playground/',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppRegistryIndexRoute = AppRegistryIndexRouteImport.update({
+  id: '/registry/',
+  path: '/registry/',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppWorkspacesIndexRoute = AppWorkspacesIndexRouteImport.update({
+  id: '/workspaces/',
+  path: '/workspaces/',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppWorkspacesWorkspaceIdRoute =
+  AppWorkspacesWorkspaceIdRouteImport.update({
+    id: '/workspaces/$workspaceId',
+    path: '/workspaces/$workspaceId',
+    getParentRoute: () => AppRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
@@ -65,7 +102,13 @@ export interface FileRoutesByFullPath {
   '/sign-in': typeof SignInRoute
   '/sign-up': typeof SignUpRoute
   '/verify-email': typeof VerifyEmailRoute
+  '/accept-invite': typeof AppAcceptInviteRoute
   '/settings': typeof AppSettingsRoute
+  '/workspaces/$workspaceId': typeof AppWorkspacesWorkspaceIdRoute
+  '/connections/': typeof AppConnectionsIndexRoute
+  '/playground/': typeof AppPlaygroundIndexRoute
+  '/registry/': typeof AppRegistryIndexRoute
+  '/workspaces/': typeof AppWorkspacesIndexRoute
 }
 export interface FileRoutesByTo {
   '/forgot-password': typeof ForgotPasswordRoute
@@ -73,8 +116,14 @@ export interface FileRoutesByTo {
   '/sign-in': typeof SignInRoute
   '/sign-up': typeof SignUpRoute
   '/verify-email': typeof VerifyEmailRoute
+  '/accept-invite': typeof AppAcceptInviteRoute
   '/settings': typeof AppSettingsRoute
   '/': typeof AppIndexRoute
+  '/workspaces/$workspaceId': typeof AppWorkspacesWorkspaceIdRoute
+  '/connections': typeof AppConnectionsIndexRoute
+  '/playground': typeof AppPlaygroundIndexRoute
+  '/registry': typeof AppRegistryIndexRoute
+  '/workspaces': typeof AppWorkspacesIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -84,8 +133,14 @@ export interface FileRoutesById {
   '/sign-in': typeof SignInRoute
   '/sign-up': typeof SignUpRoute
   '/verify-email': typeof VerifyEmailRoute
+  '/_app/accept-invite': typeof AppAcceptInviteRoute
   '/_app/settings': typeof AppSettingsRoute
   '/_app/': typeof AppIndexRoute
+  '/_app/workspaces/$workspaceId': typeof AppWorkspacesWorkspaceIdRoute
+  '/_app/connections/': typeof AppConnectionsIndexRoute
+  '/_app/playground/': typeof AppPlaygroundIndexRoute
+  '/_app/registry/': typeof AppRegistryIndexRoute
+  '/_app/workspaces/': typeof AppWorkspacesIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -96,7 +151,13 @@ export interface FileRouteTypes {
     | '/sign-in'
     | '/sign-up'
     | '/verify-email'
+    | '/accept-invite'
     | '/settings'
+    | '/workspaces/$workspaceId'
+    | '/connections/'
+    | '/playground/'
+    | '/registry/'
+    | '/workspaces/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/forgot-password'
@@ -104,8 +165,14 @@ export interface FileRouteTypes {
     | '/sign-in'
     | '/sign-up'
     | '/verify-email'
+    | '/accept-invite'
     | '/settings'
     | '/'
+    | '/workspaces/$workspaceId'
+    | '/connections'
+    | '/playground'
+    | '/registry'
+    | '/workspaces'
   id:
     | '__root__'
     | '/_app'
@@ -114,8 +181,14 @@ export interface FileRouteTypes {
     | '/sign-in'
     | '/sign-up'
     | '/verify-email'
+    | '/_app/accept-invite'
     | '/_app/settings'
     | '/_app/'
+    | '/_app/workspaces/$workspaceId'
+    | '/_app/connections/'
+    | '/_app/playground/'
+    | '/_app/registry/'
+    | '/_app/workspaces/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -178,6 +251,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppIndexRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/accept-invite': {
+      id: '/_app/accept-invite'
+      path: '/accept-invite'
+      fullPath: '/accept-invite'
+      preLoaderRoute: typeof AppAcceptInviteRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/settings': {
       id: '/_app/settings'
       path: '/settings'
@@ -185,17 +265,64 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppSettingsRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/connections/': {
+      id: '/_app/connections/'
+      path: '/connections'
+      fullPath: '/connections/'
+      preLoaderRoute: typeof AppConnectionsIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/playground/': {
+      id: '/_app/playground/'
+      path: '/playground'
+      fullPath: '/playground/'
+      preLoaderRoute: typeof AppPlaygroundIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/registry/': {
+      id: '/_app/registry/'
+      path: '/registry'
+      fullPath: '/registry/'
+      preLoaderRoute: typeof AppRegistryIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/workspaces/': {
+      id: '/_app/workspaces/'
+      path: '/workspaces'
+      fullPath: '/workspaces/'
+      preLoaderRoute: typeof AppWorkspacesIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/workspaces/$workspaceId': {
+      id: '/_app/workspaces/$workspaceId'
+      path: '/workspaces/$workspaceId'
+      fullPath: '/workspaces/$workspaceId'
+      preLoaderRoute: typeof AppWorkspacesWorkspaceIdRouteImport
+      parentRoute: typeof AppRoute
+    }
   }
 }
 
 interface AppRouteChildren {
+  AppAcceptInviteRoute: typeof AppAcceptInviteRoute
   AppSettingsRoute: typeof AppSettingsRoute
   AppIndexRoute: typeof AppIndexRoute
+  AppWorkspacesWorkspaceIdRoute: typeof AppWorkspacesWorkspaceIdRoute
+  AppConnectionsIndexRoute: typeof AppConnectionsIndexRoute
+  AppPlaygroundIndexRoute: typeof AppPlaygroundIndexRoute
+  AppRegistryIndexRoute: typeof AppRegistryIndexRoute
+  AppWorkspacesIndexRoute: typeof AppWorkspacesIndexRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
+  AppAcceptInviteRoute: AppAcceptInviteRoute,
   AppSettingsRoute: AppSettingsRoute,
   AppIndexRoute: AppIndexRoute,
+  AppWorkspacesWorkspaceIdRoute: AppWorkspacesWorkspaceIdRoute,
+  AppConnectionsIndexRoute: AppConnectionsIndexRoute,
+  AppPlaygroundIndexRoute: AppPlaygroundIndexRoute,
+  AppRegistryIndexRoute: AppRegistryIndexRoute,
+  AppWorkspacesIndexRoute: AppWorkspacesIndexRoute,
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
