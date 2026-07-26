@@ -2,6 +2,15 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Project: Action Wise
+
+This repo is the current stand-in for the future `apps/web` in the "Action Wise" monorepo (full product spec: `../.claude/handover.md`, cross-repo notes: `../.claude/CLAUDE.md`). Action Wise's frontend will eventually cover a Playground (HTTP + Firebase request builder with a draggable grid board), Beautify (JSON/table views, TS type export from recorded Runs), Faker (semantic fake-data generation), and an Actions/Flow UI — **none of that exists yet**. This repo is only the Phase 1 **Foundation + Auth UI** slice (handover sections A/B).
+
+Stack matches the target spec on Router/Query/Vite/Tailwind. **Gaps vs. the spec to know about:**
+- No TanStack Table, no TanStack Form — forms currently use react-hook-form + Zod (handover lists TanStack Form as the fixed choice; global rules leave this open per-project, so confirm with the user before migrating, don't do it unprompted).
+- No typed RPC client to the backend — API calls go through `better-auth/client` (auth only) and there's no `packages/shared` Zod schema sharing with `backend/` yet.
+- No Workspace/permission UI, no Playground/Beautify/Faker screens — this is pure auth + a settings page so far.
+
 ## Project state
 
 Auth-enabled app shell built on TanStack Start: better-auth email/password flow (sign-in/up, forgot/reset password, email verification), a protected `_app` layout with sidebar nav, and a large shadcn/Base UI component set already in place. No domain/business features beyond auth + settings yet.
