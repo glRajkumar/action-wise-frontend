@@ -18,6 +18,8 @@ import { Route as VerifyEmailRouteImport } from './routes/verify-email'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
 import { Route as AppAcceptInviteRouteImport } from './routes/_app/accept-invite'
 import { Route as AppSettingsRouteImport } from './routes/_app/settings'
+import { Route as AppActionsIndexRouteImport } from './routes/_app/actions/index'
+import { Route as AppActionsActionIdRouteImport } from './routes/_app/actions/$actionId'
 import { Route as AppConnectionsIndexRouteImport } from './routes/_app/connections/index'
 import { Route as AppPlaygroundIndexRouteImport } from './routes/_app/playground/index'
 import { Route as AppRegistryIndexRouteImport } from './routes/_app/registry/index'
@@ -68,6 +70,16 @@ const AppSettingsRoute = AppSettingsRouteImport.update({
   path: '/settings',
   getParentRoute: () => AppRoute,
 } as any)
+const AppActionsIndexRoute = AppActionsIndexRouteImport.update({
+  id: '/actions/',
+  path: '/actions/',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppActionsActionIdRoute = AppActionsActionIdRouteImport.update({
+  id: '/actions/$actionId',
+  path: '/actions/$actionId',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppConnectionsIndexRoute = AppConnectionsIndexRouteImport.update({
   id: '/connections/',
   path: '/connections/',
@@ -104,7 +116,9 @@ export interface FileRoutesByFullPath {
   '/verify-email': typeof VerifyEmailRoute
   '/accept-invite': typeof AppAcceptInviteRoute
   '/settings': typeof AppSettingsRoute
+  '/actions/$actionId': typeof AppActionsActionIdRoute
   '/workspaces/$workspaceId': typeof AppWorkspacesWorkspaceIdRoute
+  '/actions/': typeof AppActionsIndexRoute
   '/connections/': typeof AppConnectionsIndexRoute
   '/playground/': typeof AppPlaygroundIndexRoute
   '/registry/': typeof AppRegistryIndexRoute
@@ -119,7 +133,9 @@ export interface FileRoutesByTo {
   '/accept-invite': typeof AppAcceptInviteRoute
   '/settings': typeof AppSettingsRoute
   '/': typeof AppIndexRoute
+  '/actions/$actionId': typeof AppActionsActionIdRoute
   '/workspaces/$workspaceId': typeof AppWorkspacesWorkspaceIdRoute
+  '/actions': typeof AppActionsIndexRoute
   '/connections': typeof AppConnectionsIndexRoute
   '/playground': typeof AppPlaygroundIndexRoute
   '/registry': typeof AppRegistryIndexRoute
@@ -136,7 +152,9 @@ export interface FileRoutesById {
   '/_app/accept-invite': typeof AppAcceptInviteRoute
   '/_app/settings': typeof AppSettingsRoute
   '/_app/': typeof AppIndexRoute
+  '/_app/actions/$actionId': typeof AppActionsActionIdRoute
   '/_app/workspaces/$workspaceId': typeof AppWorkspacesWorkspaceIdRoute
+  '/_app/actions/': typeof AppActionsIndexRoute
   '/_app/connections/': typeof AppConnectionsIndexRoute
   '/_app/playground/': typeof AppPlaygroundIndexRoute
   '/_app/registry/': typeof AppRegistryIndexRoute
@@ -153,7 +171,9 @@ export interface FileRouteTypes {
     | '/verify-email'
     | '/accept-invite'
     | '/settings'
+    | '/actions/$actionId'
     | '/workspaces/$workspaceId'
+    | '/actions/'
     | '/connections/'
     | '/playground/'
     | '/registry/'
@@ -168,7 +188,9 @@ export interface FileRouteTypes {
     | '/accept-invite'
     | '/settings'
     | '/'
+    | '/actions/$actionId'
     | '/workspaces/$workspaceId'
+    | '/actions'
     | '/connections'
     | '/playground'
     | '/registry'
@@ -184,7 +206,9 @@ export interface FileRouteTypes {
     | '/_app/accept-invite'
     | '/_app/settings'
     | '/_app/'
+    | '/_app/actions/$actionId'
     | '/_app/workspaces/$workspaceId'
+    | '/_app/actions/'
     | '/_app/connections/'
     | '/_app/playground/'
     | '/_app/registry/'
@@ -265,6 +289,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppSettingsRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/actions/': {
+      id: '/_app/actions/'
+      path: '/actions'
+      fullPath: '/actions/'
+      preLoaderRoute: typeof AppActionsIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/actions/$actionId': {
+      id: '/_app/actions/$actionId'
+      path: '/actions/$actionId'
+      fullPath: '/actions/$actionId'
+      preLoaderRoute: typeof AppActionsActionIdRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/connections/': {
       id: '/_app/connections/'
       path: '/connections'
@@ -307,7 +345,9 @@ interface AppRouteChildren {
   AppAcceptInviteRoute: typeof AppAcceptInviteRoute
   AppSettingsRoute: typeof AppSettingsRoute
   AppIndexRoute: typeof AppIndexRoute
+  AppActionsActionIdRoute: typeof AppActionsActionIdRoute
   AppWorkspacesWorkspaceIdRoute: typeof AppWorkspacesWorkspaceIdRoute
+  AppActionsIndexRoute: typeof AppActionsIndexRoute
   AppConnectionsIndexRoute: typeof AppConnectionsIndexRoute
   AppPlaygroundIndexRoute: typeof AppPlaygroundIndexRoute
   AppRegistryIndexRoute: typeof AppRegistryIndexRoute
@@ -318,7 +358,9 @@ const AppRouteChildren: AppRouteChildren = {
   AppAcceptInviteRoute: AppAcceptInviteRoute,
   AppSettingsRoute: AppSettingsRoute,
   AppIndexRoute: AppIndexRoute,
+  AppActionsActionIdRoute: AppActionsActionIdRoute,
   AppWorkspacesWorkspaceIdRoute: AppWorkspacesWorkspaceIdRoute,
+  AppActionsIndexRoute: AppActionsIndexRoute,
   AppConnectionsIndexRoute: AppConnectionsIndexRoute,
   AppPlaygroundIndexRoute: AppPlaygroundIndexRoute,
   AppRegistryIndexRoute: AppRegistryIndexRoute,

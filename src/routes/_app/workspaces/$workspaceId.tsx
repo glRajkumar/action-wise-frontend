@@ -183,11 +183,10 @@ function WorkspaceDetailPage() {
 					{members?.map((member) => (
 						<Item key={member.userId} variant="outline">
 							<ItemContent>
-								<ItemTitle className="font-mono text-xs">
-									{member.userId}
-								</ItemTitle>
+								<ItemTitle>{member.name}</ItemTitle>
 								<ItemDescription>
-									Member since {new Date(member.createdAt).toLocaleDateString()}
+									{member.email} · member since{" "}
+									{new Date(member.createdAt).toLocaleDateString()}
 								</ItemDescription>
 							</ItemContent>
 							<ItemActions>

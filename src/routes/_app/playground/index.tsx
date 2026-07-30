@@ -1,8 +1,9 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { createFileRoute } from "@tanstack/react-router";
 import { Plus, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
+import { WorkspaceGate } from "@/components/common/workspace-gate";
 import { PlaygroundBoard } from "@/components/playground/playground-board";
 import { ResourceConfigFields } from "@/components/resources/resource-config-fields";
 import { Button } from "@/components/ui/button";
@@ -23,10 +24,30 @@ import {
 	useUpdateTile,
 } from "@/hooks/use-playground";
 import { useResources } from "@/hooks/use-resources";
+import {
+	type FirebaseRunRecord,
+	firestoreListen,
+	firestoreReadOnce,
+	firestoreWrite,
+	getFirebaseApp,
+	rtdbListen,
+	rtdbReadOnce,
+	rtdbWrite,
+} from "@/lib/firebase";
 import { useCurrentWorkspaceStore } from "@/store/current-workspace";
-import type { PlaygroundTile, TileLayout } from "@/types/playground";
-import { RENDER_MODES } from "@/types/playground";
-import type { Resource } from "@/types/resource";
+import type { FirebaseConnectionConfig } from "@/types/connection";
+import {
+	nextTilePosition,
+	type PlaygroundTile,
+	pushTileUpdate,
+	RENDER_MODES,
+	type TileUpdate,
+} from "@/types/playground";
+import type {
+	FirebaseEventFilter,
+	FirebaseMode,
+	Resource,
+} from "@/types/resource";
 import {
 	type AdhocTileFormData,
 	adhocTileFormSchema,
@@ -96,13 +117,15 @@ function adhocFormToConfig(data: AdhocTileFormData): Record<string, unknown> {
 	return { ...base, config: { mode: data.mode } };
 }
 
-function nextTilePosition(tiles: PlaygroundTile[]): TileLayout {
-	const maxRow = tiles.reduce(
-		(max, tile) => Math.max(max, tile.layout.y + tile.layout.h),
-		0,
-	);
-	return { x: 0, y: maxRow, w: 4, h: 3 };
-}
+type TileExecution = {
+	kind: string;
+	connectionId?: string;
+	address: string;
+	mode?: FirebaseMode;
+	eventFilter?: FirebaseEventFilter;
+};
+
+const TEMPLATE_KEY_PATTERN = /\{\{\s*([\w.]+)\s*\}\}/g;
 
 function PlaygroundPage() {
 	const workspaceId = useCurrentWorkspaceStore((s) => s.activeWorkspaceId);
@@ -140,9 +163,24 @@ function PlaygroundPage() {
 		activeBoardId ?? "",
 	);
 
-	const [results, setResults] = useState<Record<string, unknown>>({});
+	const [updates, setUpdates] = useState<Record<string, TileUpdate[]>>({});
 	const [errors, setErrors] = useState<Record<string, string>>({});
 	const [executingTileId, setExecutingTileId] = useState<string | null>(null);
+
+	// Active listener unsubscribes, keyed by tile id. Ref (not state) so
+	// unmount cleanup can reach them without re-renders per attach/detach.
+	const unsubscribesRef = useRef(new Map<string, () => void>());
+	const [listeningTileIds, setListeningTileIds] = useState<Set<string>>(
+		new Set(),
+	);
+
+	useEffect(() => {
+		const unsubscribes = unsubscribesRef.current;
+		return () => {
+			for (const unsubscribe of unsubscribes.values()) unsubscribe();
+			unsubscribes.clear();
+		};
+	}, []);
 
 	const [boardDialogOpen, setBoardDialogOpen] = useState(false);
 	const [addTileOpen, setAddTileOpen] = useState(false);
@@ -153,7 +191,9 @@ function PlaygroundPage() {
 	const [promoteTarget, setPromoteTarget] = useState<PlaygroundTile | null>(
 		null,
 	);
-	const [firebaseLogTarget, setFirebaseLogTarget] =
+	const [writeTarget, setWriteTarget] = useState<PlaygroundTile | null>(null);
+	const [writeValueJson, setWriteValueJson] = useState("{}");
+	const [listenConfirmTarget, setListenConfirmTarget] =
 		useState<PlaygroundTile | null>(null);
 
 	const boardForm = useForm<WorkspaceNameFormData>({
@@ -168,16 +208,43 @@ function PlaygroundPage() {
 		resolver: zodResolver(promoteTileSchema),
 		defaultValues: { name: "", direction: "invoke", danger: "safe" },
 	});
-	const [firebaseRequestJson, setFirebaseRequestJson] = useState("{}");
-	const [firebaseResponseJson, setFirebaseResponseJson] = useState("");
-	const [firebaseStatus, setFirebaseStatus] = useState<"success" | "error">(
-		"success",
-	);
 
 	const adhocKind = adhocForm.watch("kind");
 
 	function resourceById(id: string | null) {
 		return resources?.find((r) => r.id === id);
+	}
+
+	function tileExecution(tile: PlaygroundTile): TileExecution | null {
+		if (tile.resourceId) {
+			const resource = resourceById(tile.resourceId);
+			if (!resource) return null;
+			const config = resource.config as {
+				mode?: FirebaseMode;
+				eventFilter?: FirebaseEventFilter;
+			};
+			return {
+				kind: resource.kind,
+				connectionId: resource.connectionId,
+				address: resource.address,
+				mode: config.mode,
+				eventFilter: config.eventFilter,
+			};
+		}
+		const adhoc = tile.adhocConfig as {
+			kind?: string;
+			connectionId?: string;
+			address?: string;
+			config?: { mode?: FirebaseMode; eventFilter?: FirebaseEventFilter };
+		} | null;
+		if (!adhoc?.kind || !adhoc.address) return null;
+		return {
+			kind: adhoc.kind,
+			connectionId: adhoc.connectionId,
+			address: adhoc.address,
+			mode: adhoc.config?.mode,
+			eventFilter: adhoc.config?.eventFilter,
+		};
 	}
 
 	function tileTitle(tile: PlaygroundTile) {
@@ -188,8 +255,56 @@ function PlaygroundPage() {
 	}
 
 	function tileKind(tile: PlaygroundTile): string | undefined {
-		if (tile.resourceId) return resourceById(tile.resourceId)?.kind;
-		return (tile.adhocConfig as { kind?: string } | null)?.kind;
+		return tileExecution(tile)?.kind;
+	}
+
+	function tileTemplateKeys(tile: PlaygroundTile): string[] {
+		const source = tile.resourceId
+			? resourceById(tile.resourceId)
+			: tile.adhocConfig;
+		if (!source) return [];
+		const keys = new Set<string>();
+		const text = JSON.stringify(source);
+		for (const match of text.matchAll(TEMPLATE_KEY_PATTERN)) {
+			if (match[1] && !match[1].startsWith("steps.")) keys.add(match[1]);
+		}
+		return [...keys];
+	}
+
+	function pushUpdate(tileId: string, data: unknown) {
+		setUpdates((prev) => ({
+			...prev,
+			[tileId]: pushTileUpdate(prev[tileId] ?? [], data),
+		}));
+		setErrors((prev) => ({ ...prev, [tileId]: "" }));
+	}
+
+	function firebaseAppForTile(execution: TileExecution) {
+		if (!execution.connectionId) {
+			throw new Error("Tile has no connection — firebase needs one");
+		}
+		const connection = connections?.find(
+			(c) => c.id === execution.connectionId,
+		);
+		if (!connection || connection.kind !== "firebase") {
+			throw new Error("Firebase connection not found");
+		}
+		return getFirebaseApp(
+			connection.id,
+			connection.config as FirebaseConnectionConfig,
+		);
+	}
+
+	function recordFirebaseRun(tileId: string, record: FirebaseRunRecord) {
+		if (!workspaceId) return;
+		logFirebaseRunMutation.mutate({
+			workspaceId,
+			tileId,
+			request: record.request,
+			response: record.response,
+			status: record.status,
+			durationMs: record.durationMs,
+		});
 	}
 
 	function onSubmitBoard(data: WorkspaceNameFormData) {
@@ -256,15 +371,15 @@ function PlaygroundPage() {
 		})();
 	}
 
-	function onExecute(tile: PlaygroundTile) {
+	function onExecute(tile: PlaygroundTile, variables: Record<string, string>) {
 		if (!workspaceId) return;
 		setExecutingTileId(tile.id);
 		setErrors((prev) => ({ ...prev, [tile.id]: "" }));
 		executeMutation.mutate(
-			{ workspaceId, tileId: tile.id },
+			{ workspaceId, tileId: tile.id, variables },
 			{
 				onSuccess: (result) => {
-					setResults((prev) => ({ ...prev, [tile.id]: result.body }));
+					pushUpdate(tile.id, result.body);
 					setExecutingTileId(null);
 				},
 				onError: (error) => {
@@ -278,41 +393,126 @@ function PlaygroundPage() {
 		);
 	}
 
-	function openFirebaseLog(tile: PlaygroundTile) {
-		setFirebaseLogTarget(tile);
-		setFirebaseRequestJson("{}");
-		setFirebaseResponseJson("");
-		setFirebaseStatus("success");
+	async function runFirebaseOnce(tile: PlaygroundTile, value?: unknown) {
+		const execution = tileExecution(tile);
+		if (!execution) return;
+		setExecutingTileId(tile.id);
+		try {
+			const app = firebaseAppForTile(execution);
+			let record: FirebaseRunRecord;
+			if (execution.mode === "write") {
+				record =
+					execution.kind === "firebase_rtdb"
+						? await rtdbWrite(app, execution.address, value)
+						: await firestoreWrite(
+								app,
+								execution.address,
+								(value ?? {}) as Record<string, unknown>,
+							);
+			} else {
+				record =
+					execution.kind === "firebase_rtdb"
+						? await rtdbReadOnce(app, execution.address)
+						: await firestoreReadOnce(app, execution.address);
+			}
+			pushUpdate(tile.id, record.response);
+			recordFirebaseRun(tile.id, record);
+		} catch (error) {
+			const message =
+				error instanceof Error ? error.message : "Firebase call failed";
+			setErrors((prev) => ({ ...prev, [tile.id]: message }));
+			toast.error(message);
+		} finally {
+			setExecutingTileId(null);
+		}
 	}
 
-	function onSubmitFirebaseLog() {
-		if (!workspaceId || !firebaseLogTarget) return;
-		let request: unknown;
-		let response: unknown;
+	function onFirebaseRun(tile: PlaygroundTile) {
+		const execution = tileExecution(tile);
+		if (!execution) return;
+		if (execution.mode === "write") {
+			setWriteTarget(tile);
+			setWriteValueJson("{}");
+			return;
+		}
+		void runFirebaseOnce(tile);
+	}
+
+	function onSubmitWrite() {
+		if (!writeTarget) return;
+		let value: unknown;
 		try {
-			request = JSON.parse(firebaseRequestJson || "{}");
-			response = firebaseResponseJson
-				? JSON.parse(firebaseResponseJson)
-				: undefined;
+			value = JSON.parse(writeValueJson || "{}");
 		} catch {
 			toast.error("Invalid JSON");
 			return;
 		}
-		logFirebaseRunMutation.mutate(
-			{
-				workspaceId,
-				tileId: firebaseLogTarget.id,
-				request,
-				response,
-				status: firebaseStatus,
-			},
-			{
-				onSuccess: () => {
-					setResults((prev) => ({ ...prev, [firebaseLogTarget.id]: response }));
-					setFirebaseLogTarget(null);
-				},
-			},
-		);
+		const target = writeTarget;
+		setWriteTarget(null);
+		void runFirebaseOnce(target, value);
+	}
+
+	function startListening(tile: PlaygroundTile) {
+		const execution = tileExecution(tile);
+		if (!execution) return;
+		try {
+			const app = firebaseAppForTile(execution);
+			const onEvent = (record: FirebaseRunRecord) => {
+				pushUpdate(tile.id, record.response);
+				recordFirebaseRun(tile.id, record);
+			};
+			const onListenError = (error: Error) => {
+				setErrors((prev) => ({ ...prev, [tile.id]: error.message }));
+				stopListening(tile.id);
+			};
+
+			const unsubscribe =
+				execution.kind === "firebase_rtdb"
+					? rtdbListen(
+							app,
+							execution.address,
+							execution.eventFilter ?? "value",
+							onEvent,
+							onListenError,
+						)
+					: firestoreListen(app, execution.address, onEvent, onListenError);
+
+			unsubscribesRef.current.set(tile.id, unsubscribe);
+			setListeningTileIds((prev) => new Set(prev).add(tile.id));
+		} catch (error) {
+			toast.error(
+				error instanceof Error ? error.message : "Failed to attach listener",
+			);
+		}
+	}
+
+	function stopListening(tileId: string) {
+		unsubscribesRef.current.get(tileId)?.();
+		unsubscribesRef.current.delete(tileId);
+		setListeningTileIds((prev) => {
+			const next = new Set(prev);
+			next.delete(tileId);
+			return next;
+		});
+	}
+
+	function onToggleListen(tile: PlaygroundTile) {
+		if (listeningTileIds.has(tile.id)) {
+			stopListening(tile.id);
+			return;
+		}
+		const execution = tileExecution(tile);
+		if (!execution) return;
+		// Handover D: warn before a depth-unlimited RTDB `value` listener — it
+		// streams the whole subtree on every change (bandwidth/billing footgun).
+		if (
+			execution.kind === "firebase_rtdb" &&
+			(execution.eventFilter ?? "value") === "value"
+		) {
+			setListenConfirmTarget(tile);
+			return;
+		}
+		startListening(tile);
 	}
 
 	function openPromote(tile: PlaygroundTile) {
@@ -328,13 +528,13 @@ function PlaygroundPage() {
 		);
 	}
 
-	if (!workspaceId) {
-		return (
-			<p className="p-6 text-sm text-muted-foreground">
-				Select a workspace first.
-			</p>
-		);
+	function onDeleteTile(tile: PlaygroundTile) {
+		if (!workspaceId) return;
+		stopListening(tile.id);
+		deleteTileMutation.mutate({ workspaceId, tileId: tile.id });
 	}
+
+	if (!workspaceId) return <WorkspaceGate />;
 
 	return (
 		<div className="p-6">
@@ -388,16 +588,25 @@ function PlaygroundPage() {
 				<PlaygroundBoard
 					tiles={tiles ?? []}
 					getTitle={tileTitle}
-					canExecute={(tile) => tileKind(tile) === "http"}
+					getKind={tileKind}
+					getFirebaseMode={(tile) => tileExecution(tile)?.mode}
+					getTemplateKeys={tileTemplateKeys}
 					executingTileId={executingTileId}
-					results={results}
+					listeningTileIds={listeningTileIds}
+					updates={updates}
 					errors={errors}
 					onExecute={onExecute}
-					onLogFirebaseRun={openFirebaseLog}
-					onPromote={openPromote}
-					onDelete={(tile) =>
-						deleteTileMutation.mutate({ workspaceId, tileId: tile.id })
+					onFirebaseRun={onFirebaseRun}
+					onToggleListen={onToggleListen}
+					onChangeRenderMode={(tile, renderMode) =>
+						updateTileMutation.mutate({
+							workspaceId,
+							tileId: tile.id,
+							renderMode,
+						})
 					}
+					onPromote={openPromote}
+					onDelete={onDeleteTile}
 					onLayoutChange={(tileId, layout) =>
 						updateTileMutation.mutate({ workspaceId, tileId, layout })
 					}
@@ -508,57 +717,38 @@ function PlaygroundPage() {
 				</DialogWrapper>
 			)}
 
-			{firebaseLogTarget && (
+			{writeTarget && (
 				<DialogWrapper
-					open={!!firebaseLogTarget}
-					onOpenChange={(open) => !open && setFirebaseLogTarget(null)}
-					title="Log a Firebase run"
-					description="Firebase reads/writes happen client-side via the Firebase SDK, which isn't wired up in this UI yet — record the result manually here so it still shows up in this resource's recorded Runs (used by Beautify/Faker)."
-					action="Record"
-					onAction={onSubmitFirebaseLog}
-					loading={logFirebaseRunMutation.isPending}
-					contentCls="max-h-[85vh] overflow-y-auto"
+					open={!!writeTarget}
+					onOpenChange={(open) => !open && setWriteTarget(null)}
+					title="Write value"
+					description="JSON value to write at this tile's path."
+					action="Write"
+					onAction={onSubmitWrite}
 				>
-					<div className="flex flex-col gap-4">
-						<div className="flex flex-col gap-1.5">
-							<span className="text-sm font-medium">Request (JSON)</span>
-							<textarea
-								value={firebaseRequestJson}
-								onChange={(e) => setFirebaseRequestJson(e.target.value)}
-								rows={3}
-								className="rounded-md border bg-transparent p-2 font-mono text-xs"
-							/>
-						</div>
-						<div className="flex flex-col gap-1.5">
-							<span className="text-sm font-medium">
-								Response (JSON, optional)
-							</span>
-							<textarea
-								value={firebaseResponseJson}
-								onChange={(e) => setFirebaseResponseJson(e.target.value)}
-								rows={3}
-								className="rounded-md border bg-transparent p-2 font-mono text-xs"
-							/>
-						</div>
-						<div className="flex gap-2">
-							<Button
-								type="button"
-								variant={firebaseStatus === "success" ? "secondary" : "outline"}
-								size="sm"
-								onClick={() => setFirebaseStatus("success")}
-							>
-								Success
-							</Button>
-							<Button
-								type="button"
-								variant={firebaseStatus === "error" ? "secondary" : "outline"}
-								size="sm"
-								onClick={() => setFirebaseStatus("error")}
-							>
-								Error
-							</Button>
-						</div>
-					</div>
+					<textarea
+						value={writeValueJson}
+						onChange={(e) => setWriteValueJson(e.target.value)}
+						rows={5}
+						className="w-full rounded-md border bg-transparent p-2 font-mono text-xs"
+					/>
+				</DialogWrapper>
+			)}
+
+			{listenConfirmTarget && (
+				<DialogWrapper
+					open={!!listenConfirmTarget}
+					onOpenChange={(open) => !open && setListenConfirmTarget(null)}
+					title="Attach depth-unlimited listener?"
+					description="A `value` listener streams the entire subtree at this path on every change — on large paths that's a bandwidth and billing footgun. Consider a child_* event filter instead."
+					action="Attach anyway"
+					onAction={() => {
+						const target = listenConfirmTarget;
+						setListenConfirmTarget(null);
+						if (target) startListening(target);
+					}}
+				>
+					<span />
 				</DialogWrapper>
 			)}
 		</div>

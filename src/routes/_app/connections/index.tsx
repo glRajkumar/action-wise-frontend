@@ -3,6 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { Key, KeyRound, Pencil, Plus, Trash2, X } from "lucide-react";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
+import { WorkspaceGate } from "@/components/common/workspace-gate";
 import { Button } from "@/components/ui/button";
 import { DialogWrapper } from "@/components/ui/dialog";
 import {
@@ -192,13 +193,7 @@ function ConnectionsPage() {
 		);
 	}
 
-	if (!workspaceId) {
-		return (
-			<p className="p-6 text-sm text-muted-foreground">
-				Select a workspace first.
-			</p>
-		);
-	}
+	if (!workspaceId) return <WorkspaceGate />;
 
 	const secretAuthType =
 		secretTarget?.kind === "http"

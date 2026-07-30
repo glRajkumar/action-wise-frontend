@@ -1,14 +1,13 @@
+import { JsonTree } from "@/components/common/json-tree";
 import type { RenderMode } from "@/types/playground";
 
 type Props = {
 	mode: RenderMode;
 	data: unknown;
+	highlightKeys?: string[];
 };
 
-// "json_tree" here is a pretty-printed block, not an interactive collapsible
-// tree (collapse/search/copy-path from handover E) — kept simple for this
-// pass since the same readable-JSON need is met either way.
-export function RenderResult({ mode, data }: Props) {
+export function RenderResult({ mode, data, highlightKeys }: Props) {
 	if (data === undefined) {
 		return (
 			<p className="text-xs text-muted-foreground">
@@ -71,11 +70,7 @@ export function RenderResult({ mode, data }: Props) {
 		);
 	}
 
-	return (
-		<pre className="text-xs break-all whitespace-pre-wrap">
-			{JSON.stringify(data, null, 2)}
-		</pre>
-	);
+	return <JsonTree data={data} highlightKeys={highlightKeys} />;
 }
 
 function formatCell(value: unknown): string {

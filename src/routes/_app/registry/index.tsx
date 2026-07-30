@@ -14,6 +14,9 @@ import {
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
+import { JsonTree } from "@/components/common/json-tree";
+import { WorkspaceGate } from "@/components/common/workspace-gate";
+import { RenderResult } from "@/components/playground/render-result";
 import { ResourceConfigFields } from "@/components/resources/resource-config-fields";
 import { Button } from "@/components/ui/button";
 import { DialogWrapper } from "@/components/ui/dialog";
@@ -39,6 +42,7 @@ import {
 } from "@/components/ui/item";
 import { useToast } from "@/components/ui/toast";
 import { useConnections } from "@/hooks/use-connections";
+import { useBoards, useCreateTile, useTiles } from "@/hooks/use-playground";
 import {
 	useCreateFolder,
 	useCreateResource,
@@ -51,6 +55,7 @@ import {
 	useUpdateResource,
 } from "@/hooks/use-resources";
 import { useCurrentWorkspaceStore } from "@/store/current-workspace";
+import { nextTilePosition } from "@/types/playground";
 import type {
 	FirebaseRtdbResourceConfig,
 	HttpResourceConfig,
@@ -216,6 +221,7 @@ function RegistryPage() {
 	const deleteResourceMutation = useDeleteResource(workspaceId ?? "");
 	const exportTypeMutation = useExportResourceType();
 	const fakeDataMutation = useGenerateFakeData();
+	const { data: boards } = useBoards(workspaceId ?? undefined);
 
 	const [folderDialogOpen, setFolderDialogOpen] = useState(false);
 	const [resourceDialogOpen, setResourceDialogOpen] = useState(false);
@@ -227,6 +233,13 @@ function RegistryPage() {
 		sampleCount: number;
 	} | null>(null);
 	const [fakeResult, setFakeResult] = useState<unknown[] | null>(null);
+	const [fakeView, setFakeView] = useState<"json" | "tree" | "table">("json");
+	const [targetBoardId, setTargetBoardId] = useState("");
+	const { data: targetTiles } = useTiles(
+		workspaceId ?? undefined,
+		targetBoardId || undefined,
+	);
+	const sendTileMutation = useCreateTile(workspaceId ?? "", targetBoardId);
 
 	const folderForm = useForm<FolderFormData>({
 		resolver: zodResolver(folderFormSchema),
@@ -336,13 +349,46 @@ function RegistryPage() {
 		);
 	}
 
-	if (!workspaceId) {
-		return (
-			<p className="p-6 text-sm text-muted-foreground">
-				Select a workspace first.
-			</p>
+	// Handover F: generated data must be usable directly as a request body —
+	// clones the resource as an ad-hoc POST tile with the first record as body.
+	function onSendToPlayground() {
+		if (!workspaceId || !beautifyTarget || !fakeResult?.length) return;
+		if (!targetBoardId) {
+			toast.error("Pick a board first");
+			return;
+		}
+		if (beautifyTarget.kind !== "http") {
+			toast.error("Only http resources can be sent as a request body");
+			return;
+		}
+		const httpConfig = beautifyTarget.config as HttpResourceConfig;
+		sendTileMutation.mutate(
+			{
+				workspaceId,
+				boardId: targetBoardId,
+				adhocConfig: {
+					kind: "http",
+					connectionId: beautifyTarget.connectionId,
+					address: beautifyTarget.address,
+					config: {
+						method: "POST",
+						bodyType: "json",
+						headers: httpConfig.headers,
+						queryParams: httpConfig.queryParams,
+					},
+					payloadTemplate: fakeResult[0],
+				},
+				layout: nextTilePosition(targetTiles ?? []),
+				renderMode: "json_tree",
+			},
+			{
+				onSuccess: () =>
+					toast.success("Tile added — open Playground to run it"),
+			},
 		);
 	}
+
+	if (!workspaceId) return <WorkspaceGate />;
 
 	return (
 		<div className="flex h-full">
@@ -589,23 +635,70 @@ function RegistryPage() {
 								</Button>
 							</div>
 							{fakeResult && (
-								<div className="relative">
-									<pre className="max-h-64 overflow-auto rounded-md bg-muted p-3 text-xs">
-										{JSON.stringify(fakeResult, null, 2)}
-									</pre>
-									<Button
-										variant="ghost"
-										size="icon-sm"
-										className="absolute top-1 right-1"
-										onClick={() =>
-											navigator.clipboard.writeText(
-												JSON.stringify(fakeResult, null, 2),
-											)
-										}
-									>
-										<Copy size={13} />
-									</Button>
-								</div>
+								<>
+									<div className="flex items-center gap-1">
+										{(["json", "tree", "table"] as const).map((view) => (
+											<Button
+												key={view}
+												type="button"
+												variant={fakeView === view ? "secondary" : "ghost"}
+												size="sm"
+												onClick={() => setFakeView(view)}
+											>
+												{view}
+											</Button>
+										))}
+										<Button
+											variant="ghost"
+											size="icon-sm"
+											className="ml-auto"
+											onClick={() =>
+												navigator.clipboard.writeText(
+													JSON.stringify(fakeResult, null, 2),
+												)
+											}
+										>
+											<Copy size={13} />
+										</Button>
+									</div>
+									<div className="max-h-64 overflow-auto rounded-md bg-muted p-3">
+										{fakeView === "json" && (
+											<pre className="text-xs">
+												{JSON.stringify(fakeResult, null, 2)}
+											</pre>
+										)}
+										{fakeView === "tree" && (
+											<JsonTree data={fakeResult} showSearch />
+										)}
+										{fakeView === "table" && (
+											<RenderResult mode="table" data={fakeResult} />
+										)}
+									</div>
+									{beautifyTarget.kind === "http" && (
+										<div className="flex items-center gap-2">
+											<select
+												value={targetBoardId}
+												onChange={(e) => setTargetBoardId(e.target.value)}
+												className="h-8 rounded-lg border border-input bg-transparent px-2 text-xs"
+											>
+												<option value="">Pick a board…</option>
+												{boards?.map((board) => (
+													<option key={board.id} value={board.id}>
+														{board.name}
+													</option>
+												))}
+											</select>
+											<Button
+												size="sm"
+												variant="outline"
+												onClick={onSendToPlayground}
+												disabled={sendTileMutation.isPending}
+											>
+												Send to playground as body
+											</Button>
+										</div>
+									)}
+								</>
 							)}
 						</section>
 					</div>

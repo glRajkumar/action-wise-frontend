@@ -13,6 +13,8 @@ export type WorkspaceWithRole = Workspace & { role: WorkspaceRole };
 
 export type WorkspaceMember = {
 	userId: string;
+	name: string;
+	email: string;
 	role: WorkspaceRole;
 	createdAt: string;
 };

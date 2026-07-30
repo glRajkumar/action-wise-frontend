@@ -172,3 +172,20 @@ export const fakeDataCountSchema = z.object({
 	count: z.number().int().min(1, "At least 1").max(100, "At most 100"),
 });
 export type FakeDataCountFormData = z.infer<typeof fakeDataCountSchema>;
+
+export const actionFormSchema = z.object({
+	name: z.string().trim().min(1, "Required").max(200, "Too long"),
+	description: z.string().trim().max(2000, "Too long").optional(),
+});
+export type ActionFormData = z.infer<typeof actionFormSchema>;
+
+export const actionStepFormSchema = z.object({
+	resourceId: z.string().min(1, "Pick a resource"),
+	name: z
+		.string()
+		.trim()
+		.min(1, "Required")
+		.max(100, "Too long")
+		.regex(/^[A-Za-z0-9_]+$/, "Letters, numbers, underscores only"),
+});
+export type ActionStepFormData = z.infer<typeof actionStepFormSchema>;

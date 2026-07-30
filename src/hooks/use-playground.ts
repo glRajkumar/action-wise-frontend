@@ -136,14 +136,12 @@ export function useExecuteTile() {
 	});
 }
 
+// No success toast: listener fires log a run each event and would spam.
 export function useLogFirebaseRun() {
 	const toast = useToast();
 
 	return useMutation({
 		mutationFn: logFirebaseRun,
-		onSuccess() {
-			toast.success("Run recorded");
-		},
 		onError(error) {
 			toast.error(error?.message || "Failed to record run");
 		},

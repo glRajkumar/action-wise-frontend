@@ -1,13 +1,15 @@
 import { DndContext, type DragEndEvent } from "@dnd-kit/core";
 import { restrictToParentElement } from "@dnd-kit/modifiers";
-
 import {
 	CELL_GAP,
 	CELL_SIZE,
 	GRID_COLUMNS,
 	type PlaygroundTile,
+	type RenderMode,
 	type TileLayout,
+	type TileUpdate,
 } from "@/types/playground";
+import type { FirebaseMode } from "@/types/resource";
 import { TileCard } from "./tile-card";
 
 const CELL = CELL_SIZE + CELL_GAP;
@@ -15,12 +17,17 @@ const CELL = CELL_SIZE + CELL_GAP;
 type Props = {
 	tiles: PlaygroundTile[];
 	getTitle: (tile: PlaygroundTile) => string;
-	canExecute: (tile: PlaygroundTile) => boolean;
+	getKind: (tile: PlaygroundTile) => string | undefined;
+	getFirebaseMode: (tile: PlaygroundTile) => FirebaseMode | undefined;
+	getTemplateKeys: (tile: PlaygroundTile) => string[];
 	executingTileId: string | null;
-	results: Record<string, unknown>;
+	listeningTileIds: Set<string>;
+	updates: Record<string, TileUpdate[]>;
 	errors: Record<string, string>;
-	onExecute: (tile: PlaygroundTile) => void;
-	onLogFirebaseRun: (tile: PlaygroundTile) => void;
+	onExecute: (tile: PlaygroundTile, variables: Record<string, string>) => void;
+	onFirebaseRun: (tile: PlaygroundTile) => void;
+	onToggleListen: (tile: PlaygroundTile) => void;
+	onChangeRenderMode: (tile: PlaygroundTile, mode: RenderMode) => void;
 	onPromote: (tile: PlaygroundTile) => void;
 	onDelete: (tile: PlaygroundTile) => void;
 	onLayoutChange: (tileId: string, layout: TileLayout) => void;
@@ -32,12 +39,17 @@ type Props = {
 export function PlaygroundBoard({
 	tiles,
 	getTitle,
-	canExecute,
+	getKind,
+	getFirebaseMode,
+	getTemplateKeys,
 	executingTileId,
-	results,
+	listeningTileIds,
+	updates,
 	errors,
 	onExecute,
-	onLogFirebaseRun,
+	onFirebaseRun,
+	onToggleListen,
+	onChangeRenderMode,
 	onPromote,
 	onDelete,
 	onLayoutChange,
@@ -79,12 +91,17 @@ export function PlaygroundBoard({
 						key={tile.id}
 						tile={tile}
 						title={getTitle(tile)}
-						canExecute={canExecute(tile)}
+						kind={getKind(tile)}
+						firebaseMode={getFirebaseMode(tile)}
 						executing={executingTileId === tile.id}
-						result={results[tile.id]}
+						listening={listeningTileIds.has(tile.id)}
+						updates={updates[tile.id] ?? []}
 						resultError={errors[tile.id]}
-						onExecute={() => onExecute(tile)}
-						onLogFirebaseRun={() => onLogFirebaseRun(tile)}
+						templateKeys={getTemplateKeys(tile)}
+						onExecute={(variables) => onExecute(tile, variables)}
+						onFirebaseRun={() => onFirebaseRun(tile)}
+						onToggleListen={() => onToggleListen(tile)}
+						onChangeRenderMode={(mode) => onChangeRenderMode(tile, mode)}
 						onPromote={tile.resourceId ? undefined : () => onPromote(tile)}
 						onDelete={() => onDelete(tile)}
 						onResize={(w, h) =>

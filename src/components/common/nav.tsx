@@ -1,12 +1,14 @@
 import { Link, useMatchRoute } from "@tanstack/react-router";
 import type { LucideIcon } from "lucide-react";
 import {
+	Building2,
 	Database,
 	Key,
 	LayoutDashboard,
 	LogOut,
 	PlaySquare,
 	Settings,
+	Workflow,
 } from "lucide-react";
 import { WorkspaceSwitcher } from "@/components/common/workspace-switcher";
 import {
@@ -32,6 +34,8 @@ const links: {
 	{ to: "/connections", label: "Connections", icon: Key },
 	{ to: "/registry", label: "Registry", icon: Database },
 	{ to: "/playground", label: "Playground", icon: PlaySquare },
+	{ to: "/actions", label: "Actions", icon: Workflow },
+	{ to: "/workspaces", label: "Workspaces", icon: Building2 },
 	{ to: "/settings", label: "Settings", icon: Settings },
 ];
 

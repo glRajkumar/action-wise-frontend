@@ -1,6 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router"
 import { UserPlus, Loader2 } from "lucide-react"
 import { zodResolver } from "@hookform/resolvers/zod"
+import { useEffect } from "react"
 import { useForm } from "react-hook-form"
 
 import { signUpSchema, type SignUpFormData } from "@/utils/schemas"
@@ -16,15 +17,16 @@ function SignUpPage() {
   const { data: session } = useSession()
   const signUpMutation = useSignUp()
 
-  if (session) {
-    navigate({ to: "/", replace: true })
-    return null
-  }
-
   const form = useForm<SignUpFormData>({
     resolver: zodResolver(signUpSchema),
     defaultValues: { name: "", email: "", password: "" },
   })
+
+  useEffect(() => {
+    if (session) navigate({ to: "/", replace: true })
+  }, [session, navigate])
+
+  if (session) return null
 
   function onSubmit(data: SignUpFormData) {
     signUpMutation.mutate(data, {
